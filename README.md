@@ -9,6 +9,7 @@ Bot Telegram per tenere un diario alimentare con foto e export in Excel.
 - 💾 Database SQLite persistente
 - 📊 Statistiche giornaliere e settimanali
 - 📥 Export in Excel (completo, settimanale, mensile)
+- 🌐 **Pannello Admin Web** per gestire il database
 - 🐳 Deploy con Docker
 - 🔄 CI/CD automatizzato con GitHub Actions
 
@@ -56,12 +57,17 @@ Crea il file `.env` con le tue credenziali:
 cat > .env << EOF
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 ALLOWED_USER_IDS=987654321
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your_secure_password
+ADMIN_SECRET_KEY=$(openssl rand -hex 32)
+ADMIN_PORT=5000
 EOF
 ```
 
 Sostituisci:
 - `123456789:ABCdefGHIjklMNOpqrsTUVwxyz` con il token del tuo bot
 - `987654321` con il tuo User ID
+- `your_secure_password` con una password sicura per l'admin panel
 
 **Per permettere più utenti**, separa gli ID con virgole:
 ```bash
@@ -234,13 +240,130 @@ Il bot risponderà con:
 - Foto: [immagine della pizza]
 - Caption: `Pizza quattro formaggi al ristorante`
 
-Il bot risponderà:
+Il bot risponderà con:
 ```
 ✅ Pasto registrato!
 
 📝 Pizza quattro formaggi al ristorante
 🕐 11/02/2026 20:30
 📷 Foto salvata
+```
+
+## 🌐 Pannello Admin Web
+
+Oltre al bot Telegram, è disponibile un'interfaccia web per gestire il database.
+
+### Caratteristiche
+
+- ✅ Interfaccia web moderna con Bootstrap
+- 🔍 Ricerca e filtri avanzati per i pasti
+- ✏️ Modifica ed elimina pasti
+- 📊 Visualizzazione dati con paginazione
+- 📥 Export CSV/Excel direttamente dall'interfaccia
+- 🔒 Autenticazione con username e password
+
+### Accesso al Pannello Admin
+
+#### Con Docker Compose (Consigliato)
+
+Il pannello admin si avvia automaticamente insieme al bot:
+
+```bash
+# Assicurati che .env contenga le credenziali admin
+docker-compose -f docker-compose.prod.yml up -d
+
+# Verifica che entrambi i servizi siano attivi
+docker-compose -f docker-compose.prod.yml ps
+```
+
+Accedi al pannello su: **http://localhost:5000**
+
+Credenziali:
+- **Username**: quello impostato in `ADMIN_USERNAME` (default: `admin`)
+- **Password**: quella impostata in `ADMIN_PASSWORD`
+
+#### Esecuzione Manuale (Python)
+
+```bash
+# Attiva virtual environment
+source venv/bin/activate
+
+# Imposta le variabili d'ambiente
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=your_password
+export ADMIN_SECRET_KEY=$(openssl rand -hex 32)
+
+# Avvia il pannello admin
+python admin.py
+```
+
+Accedi su: **http://localhost:5000**
+
+### Funzioni del Pannello Admin
+
+1. **Dashboard Home**: Panoramica del sistema
+2. **Gestione Pasti**:
+   - Visualizza tutti i pasti con paginazione
+   - Ricerca per username, user_id, o descrizione
+   - Filtra per user_id, username, o data
+   - Ordina per qualsiasi colonna
+   - Modifica singoli pasti
+   - Elimina pasti
+3. **Export**:
+   - Export in CSV
+   - Export in Excel (.xlsx)
+   - Export dei risultati filtrati
+
+### Sicurezza
+
+- ✅ Autenticazione HTTP Basic Auth
+- ✅ Credenziali tramite variabili d'ambiente
+- ✅ Secret key per sessioni Flask
+- ⚠️ **IMPORTANTE**: Cambia sempre le password di default in produzione!
+- 🔒 **Consiglio**: Usa un reverse proxy (nginx) con HTTPS in produzione
+
+### Configurazione Avanzata
+
+Nel file `.env`, puoi configurare:
+
+```bash
+# Admin Panel
+ADMIN_USERNAME=admin                    # Username per login
+ADMIN_PASSWORD=strong_password          # Password per login
+ADMIN_SECRET_KEY=random_secret_key      # Chiave segreta Flask
+ADMIN_PORT=5000                         # Porta su cui esporre l'admin
+```
+
+#### Cambiare Porta
+
+```bash
+# Nel file .env
+ADMIN_PORT=8080
+
+# Riavvia il servizio
+docker-compose -f docker-compose.prod.yml restart food-diary-admin
+```
+
+#### Accesso Esterno (Produzione)
+
+**⚠️ NON esporre direttamente su internet senza HTTPS!**
+
+Usa un reverse proxy come nginx con SSL:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name admin.tuosito.com;
+    
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    location / {
+        proxy_pass http://localhost:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
 ```
 
 ### Visualizzare Statistiche
@@ -346,8 +469,11 @@ food_diary_bot/
 ├── bot.py                      # Bot principale
 ├── database.py                 # Gestione database SQLite
 ├── exporter.py                 # Export in Excel
+├── admin.py                    # Pannello admin Flask
 ├── requirements.txt            # Dipendenze Python
 ├── Dockerfile                  # Docker configuration
+├── docker-compose.dev.yml     # Docker Compose development
+├── docker-compose.prod.yml    # Docker Compose production
 ├── .dockerignore              # File da escludere dal build
 ├── .env.example               # Template per variabili d'ambiente
 ├── .gitignore                 # File da ignorare in git
@@ -373,21 +499,31 @@ food_diary_bot/
 # Controlla i log del container
 docker logs food-diary-bot
 
-# Oppure con docker-compose
-docker-compose logs -f
+# Controlla i log del pannello admin
+docker logs food-diary-admin
 
-# Verifica che il container sia in esecuzione
+# Oppure con docker-compose
+docker-compose -f docker-compose.prod.yml logs -f
+
+# Verifica che i container siano in esecuzione
 docker ps
 ```
 
 ### Docker: Riavviare il bot
 
 ```bash
-# Con Docker
+# Con Docker - Riavvia bot
 docker restart food-diary-bot
 
-# Oppure con docker-compose
-docker-compose restart
+# Con Docker - Riavvia admin panel
+docker restart food-diary-admin
+
+# Oppure con docker-compose - Riavvia tutto
+docker-compose -f docker-compose.prod.yml restart
+
+# Riavvia solo un servizio specifico
+docker-compose -f docker-compose.prod.yml restart food-diary-bot
+docker-compose -f docker-compose.prod.yml restart food-diary-admin
 ```
 
 ### Errore "Token non trovato"
@@ -415,6 +551,35 @@ docker exec food-diary-bot du -sh /app/photos/
 
 # Elimina foto vecchie se necessario (ATTENZIONE!)
 # find ./photos/ -mtime +90 -delete  # Elimina foto più vecchie di 90 giorni
+```
+
+### Admin Panel: Non riesco ad accedere
+
+```bash
+# Verifica che il servizio sia attivo
+docker ps | grep food-diary-admin
+
+# Controlla i log per errori
+docker logs food-diary-admin
+
+# Verifica le credenziali in .env
+cat .env | grep ADMIN_
+
+# Testa la connessione
+curl -u admin:password http://localhost:5000
+```
+
+### Admin Panel: Porta già in uso
+
+```bash
+# Cambia porta nel .env
+echo "ADMIN_PORT=8080" >> .env
+
+# Riavvia il servizio
+docker-compose -f docker-compose.prod.yml restart food-diary-admin
+
+# Accedi sulla nuova porta
+# http://localhost:8080
 ```
 
 ### Database bloccato
