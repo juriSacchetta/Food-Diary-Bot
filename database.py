@@ -28,11 +28,23 @@ class DatabaseManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 username TEXT,
+                meal_type TEXT DEFAULT 'meal',
+                ingredients TEXT,
                 message TEXT NOT NULL,
                 photo_path TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        
+        # Migration: Add meal_type and ingredients columns if they don't exist
+        cursor.execute("PRAGMA table_info(meals)")
+        columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'meal_type' not in columns:
+            cursor.execute("ALTER TABLE meals ADD COLUMN meal_type TEXT DEFAULT 'meal'")
+        
+        if 'ingredients' not in columns:
+            cursor.execute("ALTER TABLE meals ADD COLUMN ingredients TEXT")
         
         conn.commit()
         conn.close()
@@ -42,16 +54,18 @@ class DatabaseManager:
         user_id: int, 
         username: Optional[str], 
         message: str, 
-        photo_path: Optional[str] = None
+        photo_path: Optional[str] = None,
+        meal_type: str = 'meal',
+        ingredients: Optional[str] = None
     ) -> int:
         """Add a new meal entry"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            INSERT INTO meals (user_id, username, message, photo_path)
-            VALUES (?, ?, ?, ?)
-        """, (user_id, username, message, photo_path))
+            INSERT INTO meals (user_id, username, meal_type, ingredients, message, photo_path)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, username, meal_type, ingredients, message, photo_path))
         
         meal_id = cursor.lastrowid if cursor.lastrowid else 0
         conn.commit()
