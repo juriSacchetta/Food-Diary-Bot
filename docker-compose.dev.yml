@@ -25,3 +25,38 @@ services:
         max-file: "3"
     labels:
       - "com.food-diary-bot.environment=development"
+
+  food-diary-admin:
+    image: ghcr.io/jurisacchetta/food-diary-bot:dev
+    container_name: food-diary-admin-dev
+    restart: unless-stopped
+    command: python admin.py
+    ports:
+      - "5000:5000"
+    environment:
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - ADMIN_SECRET_KEY=${ADMIN_SECRET_KEY:-dev-secret-key-please-change}
+      - ADMIN_HOST=0.0.0.0
+      - ADMIN_PORT=5000
+      - ADMIN_DEBUG=True
+      - DB_PATH=/app/data/food_diary.db
+    volumes:
+      - ./data:/app/data
+      - ./photos:/app/photos
+    depends_on:
+      - food-diary-bot
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.food-diary-bot.environment=development"
+      - "com.food-diary-bot.service=admin"
