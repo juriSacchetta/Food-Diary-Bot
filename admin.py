@@ -38,13 +38,45 @@ class Meal(Base):
 
 
 class SecureAdminIndexView(AdminIndexView):
-    """Custom admin index view with authentication check"""
+    """Custom admin index view with authentication check and statistics"""
+    
+    def __init__(self, *args, **kwargs):
+        self.db_session = kwargs.pop('session', None)
+        super(SecureAdminIndexView, self).__init__(*args, **kwargs)
     
     @expose('/')
     def index(self):
         if not self.is_authenticated():
             return redirect(url_for('admin.login_view'))
-        return super(SecureAdminIndexView, self).index()
+        
+        # Get database statistics
+        from sqlalchemy import func
+        from datetime import datetime, timedelta
+        
+        total_meals = self.db_session.query(func.count(Meal.id)).scalar() or 0
+        total_users = self.db_session.query(func.count(func.distinct(Meal.user_id))).scalar() or 0
+        recent_meals = self.db_session.query(Meal).order_by(Meal.timestamp.desc()).limit(5).all()
+        
+        # Calculate today's meals
+        today = datetime.now().date()
+        meals_today = self.db_session.query(func.count(Meal.id)).filter(
+            func.date(Meal.timestamp) == today
+        ).scalar() or 0
+        
+        # Calculate this week's meals
+        week_ago = datetime.now() - timedelta(days=7)
+        meals_this_week = self.db_session.query(func.count(Meal.id)).filter(
+            Meal.timestamp >= week_ago
+        ).scalar() or 0
+        
+        return self.render(
+            'admin/custom_index.html',
+            total_meals=total_meals,
+            total_users=total_users,
+            meals_today=meals_today,
+            meals_this_week=meals_this_week,
+            recent_meals=recent_meals
+        )
     
     @expose('/login/', methods=('GET', 'POST'))
     def login_view(self):
@@ -150,7 +182,7 @@ def create_app():
         app,
         name='Food Diary Admin',
         template_mode='bootstrap4',
-        index_view=SecureAdminIndexView(name='Home'),
+        index_view=SecureAdminIndexView(name='Home', session=db_session),
         base_template='admin/base.html'
     )
     
