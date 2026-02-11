@@ -1,0 +1,15 @@
+[Unit]
+Description=Food Diary Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/food_diary_bot
+Environment="TELEGRAM_BOT_TOKEN=your_token_here"
+ExecStart=/home/pi/food_diary_bot/venv/bin/python /home/pi/food_diary_bot/bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
