@@ -21,6 +21,7 @@ from telegram.ext import (
 from database import DatabaseManager
 from exporter import ExcelExporter
 from nutrition_api import NutritionAPI
+from llm_processor import LLMProcessor
 
 
 # Configure logging
@@ -35,12 +36,25 @@ MEAL_TYPE, INGREDIENTS, CALORIES, PHOTO, NOTES = range(5)
 
 
 class FoodDiaryBot:
-    def __init__(self, token: str, allowed_user_ids: Optional[list] = None, nutrition_api_key: Optional[str] = None):
+    def __init__(self, token: str, allowed_user_ids: Optional[list] = None, nutrition_api_key: Optional[str] = None, gemini_api_key: Optional[str] = None):
         self.token = token
         self.allowed_user_ids = allowed_user_ids or []
         self.db = DatabaseManager()
         self.exporter = ExcelExporter(self.db)
         self.nutrition_api = NutritionAPI(nutrition_api_key)
+        
+        # Initialize LLM processor for quick meal registration
+        self.llm_processor = None
+        if gemini_api_key:
+            try:
+                self.llm_processor = LLMProcessor(gemini_api_key)
+                logger.info("LLM quick registration enabled")
+            except Exception as e:
+                logger.warning(f"LLM processor initialization failed: {e}")
+                logger.warning("Quick registration will not be available")
+        else:
+            logger.info("No GEMINI_API_KEY provided - quick registration disabled")
+        
         self.photos_dir = Path("photos")
         self.photos_dir.mkdir(exist_ok=True)
     
@@ -70,13 +84,17 @@ class FoodDiaryBot:
 
 Benvenuto nel tuo Diario Alimentare! 🍽️
 
-**Come usarlo:**
-🍽️ /new_meal - Registra un nuovo pasto (interattivo)
+**Registrazione veloce:**
+⚡ Invia semplicemente testo e/o foto del pasto!
+   Es: "Pizza margherita 🍕" + foto
+   Es: "Pasta 350g"
+   Es: Solo una foto 📷
+
+**Comandi:**
+🍽️ /new_meal - Registrazione guidata (dettagliata)
 📊 /stats - Visualizza le tue statistiche
 📥 /export - Scarica il tuo diario in Excel
 ❓ /help - Mostra tutti i comandi
-
-Inizia subito registrando il tuo primo pasto con /new_meal!
         """
         await update.message.reply_text(welcome_message)
     
@@ -93,18 +111,33 @@ Inizia subito registrando il tuo primo pasto con /new_meal!
 
 /start - Messaggio di benvenuto
 /help - Mostra questo messaggio
-/new_meal - Registra un nuovo pasto (guidato)
+/new_meal - Registrazione guidata (dettagliata)
 /stats - Statistiche del tuo diario
 /export - Esporta tutto in Excel
 /export_week - Esporta ultima settimana
 /export_month - Esporta ultimo mese
 
-**Per registrare un pasto:**
-Usa il comando /new_meal e segui la procedura guidata:
+**⚡ Registrazione veloce:**
+Invia semplicemente un messaggio con:
+• Descrizione del pasto ("Pizza margherita")
+• Peso opzionale ("350g")
+• Foto (opzionale)
+
+Esempi:
+• "Pasta al pomodoro 300g" + foto
+• "Colazione: caffè e cornetto"
+• "🍕" + foto
+• Solo foto del piatto
+
+Il bot analizza automaticamente e registra il pasto!
+
+**🍽️ Registrazione guidata:**
+Usa /new_meal per la procedura dettagliata:
 1️⃣ Scegli il tipo (Pasto principale o Snack)
 2️⃣ Inserisci gli ingredienti
-3️⃣ Aggiungi una foto (opzionale)
-4️⃣ Aggiungi note extra (opzionale)
+3️⃣ Calorie (auto-calcolate o manuali)
+4️⃣ Aggiungi una foto (opzionale)
+5️⃣ Aggiungi note extra (opzionale)
         """
         await update.message.reply_text(help_text)
     
@@ -578,24 +611,95 @@ Usa il comando /new_meal e segui la procedura guidata:
         return ConversationHandler.END
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle regular text messages and photos - inform about new registration method"""
+        """Handle unstructured meal input with LLM-powered quick registration"""
         user = update.effective_user
         
         if not self.is_user_allowed(user.id):
             await update.message.reply_text("⛔ Accesso negato.")
             return
         
-        # Inform user about the new interactive registration
-        await update.message.reply_text(
-            "ℹ️ **Nuovo Sistema di Registrazione!**\n\n"
-            "Ora puoi registrare i pasti in modo guidato con più dettagli!\n\n"
-            "🍽️ Usa il comando **/new_meal** per iniziare la registrazione interattiva.\n\n"
-            "Potrai scegliere:\n"
-            "• Tipo di pasto (Principale o Snack)\n"
-            "• Ingredienti\n"
-            "• Foto (opzionale)\n"
-            "• Note aggiuntive (opzionale)"
-        )
+        # If LLM processor is not available, inform user about /new_meal command
+        if not self.llm_processor:
+            await update.message.reply_text(
+                "ℹ️ **Registrazione Veloce Non Disponibile**\n\n"
+                "La registrazione veloce con IA non è configurata.\n\n"
+                "🍽️ Usa il comando **/new_meal** per la registrazione guidata.\n\n"
+                "Potrai scegliere:\n"
+                "• Tipo di pasto (Principale o Snack)\n"
+                "• Ingredienti\n"
+                "• Calorie (auto-calcolate)\n"
+                "• Foto (opzionale)\n"
+                "• Note aggiuntive (opzionale)"
+            )
+            return
+        
+        # Quick registration with LLM!
+        await update.message.reply_text("⏳ Analizzo il pasto...")
+        
+        # Extract text and photo
+        text = update.message.text or update.message.caption or ""
+        photo_path = None
+        
+        if update.message.photo:
+            photo_path = await self.save_photo(update, context)
+        
+        # Process with LLM
+        try:
+            meal_data = await self.llm_processor.analyze_meal(text, photo_path)
+        except Exception as e:
+            logger.error(f"LLM processing error: {e}")
+            meal_data = None
+        
+        if not meal_data:
+            await update.message.reply_text(
+                "❌ Non sono riuscito a capire il pasto.\n\n"
+                "Prova a fornire più dettagli o usa /new_meal per la registrazione guidata."
+            )
+            return
+        
+        # Save to database
+        try:
+            meal_id = self.db.add_meal(
+                user_id=user.id,
+                username=user.username,
+                message=meal_data['description'],
+                photo_path=photo_path,
+                meal_type=meal_data['meal_type'],
+                ingredients=meal_data['ingredients'],
+                calories=meal_data.get('calories')
+            )
+            
+            # Send confirmation
+            timestamp = datetime.now().strftime("%d/%m/%Y %H:%M")
+            meal_emoji = "🍽️" if meal_data['meal_type'] == 'main' else "🍪"
+            
+            confirmation = (
+                f"✅ **Pasto registrato!**\n\n"
+                f"{meal_emoji} {meal_data['meal_type_label']}\n"
+                f"📝 {meal_data['ingredients']}\n"
+            )
+            
+            if meal_data.get('weight'):
+                confirmation += f"⚖️ ~{meal_data['weight']}\n"
+            
+            if meal_data.get('calories'):
+                confirmation += f"🔥 ~{meal_data['calories']} kcal\n"
+            
+            confirmation += f"🕐 {timestamp}"
+            
+            if photo_path:
+                confirmation += "\n📷 Foto salvata"
+            
+            await update.message.reply_text(confirmation)
+            
+            logger.info(f"Quick meal registered for user {user.id}: {meal_data['description']}")
+            
+        except Exception as e:
+            logger.error(f"Error saving quick meal: {e}")
+            await update.message.reply_text(
+                "❌ Errore durante il salvataggio del pasto.\n"
+                "Riprova o usa /new_meal per la registrazione guidata."
+            )
     
     async def save_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Optional[str]:
         """Save photo from message"""
@@ -695,7 +799,14 @@ def main():
     else:
         logger.info("No USDA API key - using DEMO_KEY (30 requests/hour limit)")
     
-    bot = FoodDiaryBot(token, allowed_user_ids, nutrition_api_key)
+    # Get Gemini API key (optional)
+    gemini_api_key = os.getenv("GEMINI_API_KEY", None)
+    if gemini_api_key:
+        logger.info("Gemini API key found - quick registration enabled")
+    else:
+        logger.info("No Gemini API key - quick registration disabled")
+    
+    bot = FoodDiaryBot(token, allowed_user_ids, nutrition_api_key, gemini_api_key)
     bot.run()
 
 
