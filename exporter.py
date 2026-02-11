@@ -25,10 +25,13 @@ class ExcelExporter:
         if not meals:
             raise ValueError("Nessun pasto da esportare")
         
-        # Convert to DataFrame
+        # Convert to DataFrame (excluding ID, User ID, Username - export is already user-specific)
         df = pd.DataFrame(meals, columns=[
             'ID', 'User ID', 'Username', 'Descrizione', 'Foto', 'Data e Ora'
         ])
+        
+        # Keep only relevant columns for user
+        df = df[['Data e Ora', 'Descrizione', 'Foto']]
         
         # Format timestamp
         df['Data e Ora'] = pd.to_datetime(df['Data e Ora'])
@@ -59,12 +62,9 @@ class ExcelExporter:
                 worksheet.write(0, col_num, value, header_format)
             
             # Set column widths and row heights
-            worksheet.set_column('A:A', 8)   # ID
-            worksheet.set_column('B:B', 10)  # User ID
-            worksheet.set_column('C:C', 15)  # Username
-            worksheet.set_column('D:D', 50)  # Descrizione
-            worksheet.set_column('E:E', 20)  # Foto (wider for images)
-            worksheet.set_column('F:F', 20)  # Data e Ora
+            worksheet.set_column('A:A', 20)  # Data e Ora
+            worksheet.set_column('B:B', 50)  # Descrizione
+            worksheet.set_column('C:C', 20)  # Foto (wider for images)
             
             # Insert images for meals with photos
             for idx, row in df.iterrows():
@@ -79,10 +79,10 @@ class ExcelExporter:
                             # Set row height for image (in points, 96 points = ~128 pixels)
                             worksheet.set_row(excel_row, 96)
                             
-                            # Insert image in the Foto column (column E = index 4)
+                            # Insert image in the Foto column (column C = index 2)
                             # x_offset and y_offset center the image in the cell
                             worksheet.insert_image(
-                                excel_row, 4,  # row, col (0-indexed)
+                                excel_row, 2,  # row, col (0-indexed) - Column C
                                 photo_path,
                                 {
                                     'x_scale': 0.15,  # Scale down image
@@ -93,10 +93,10 @@ class ExcelExporter:
                             )
                         except Exception as e:
                             # If image insertion fails, just write the path
-                            worksheet.write(excel_row, 4, f"[Errore foto: {str(e)}]")
+                            worksheet.write(excel_row, 2, f"[Errore foto: {str(e)}]")
                     else:
                         # Photo path exists in DB but file not found
-                        worksheet.write(idx + 1, 4, "[Foto non trovata]")
+                        worksheet.write(idx + 1, 2, "[Foto non trovata]")
         
         return filename
     
@@ -116,6 +116,9 @@ class ExcelExporter:
         df = pd.DataFrame(meals, columns=[
             'ID', 'User ID', 'Username', 'Descrizione', 'Foto', 'Data e Ora'
         ])
+        
+        # Keep only relevant columns for user
+        df = df[['Data e Ora', 'Descrizione', 'Foto']]
         
         df['Data e Ora'] = pd.to_datetime(df['Data e Ora'])
         
@@ -139,12 +142,9 @@ class ExcelExporter:
                 worksheet.write(0, col_num, value, header_format)
             
             # Set column widths and row heights
-            worksheet.set_column('A:A', 8)
-            worksheet.set_column('B:B', 10)
-            worksheet.set_column('C:C', 15)
-            worksheet.set_column('D:D', 50)
-            worksheet.set_column('E:E', 20)  # Foto (wider for images)
-            worksheet.set_column('F:F', 20)
+            worksheet.set_column('A:A', 20)  # Data e Ora
+            worksheet.set_column('B:B', 50)  # Descrizione
+            worksheet.set_column('C:C', 20)  # Foto (wider for images)
             
             # Insert images for meals with photos
             for idx, row in df.iterrows():
@@ -159,9 +159,9 @@ class ExcelExporter:
                             # Set row height for image (in points, 96 points = ~128 pixels)
                             worksheet.set_row(excel_row, 96)
                             
-                            # Insert image in the Foto column (column E = index 4)
+                            # Insert image in the Foto column (column C = index 2)
                             worksheet.insert_image(
-                                excel_row, 4,  # row, col (0-indexed)
+                                excel_row, 2,  # row, col (0-indexed) - Column C
                                 photo_path,
                                 {
                                     'x_scale': 0.15,  # Scale down image
@@ -172,9 +172,9 @@ class ExcelExporter:
                             )
                         except Exception as e:
                             # If image insertion fails, just write the path
-                            worksheet.write(excel_row, 4, f"[Errore foto: {str(e)}]")
+                            worksheet.write(excel_row, 2, f"[Errore foto: {str(e)}]")
                     else:
                         # Photo path exists in DB but file not found
-                        worksheet.write(idx + 1, 4, "[Foto non trovata]")
+                        worksheet.write(idx + 1, 2, "[Foto non trovata]")
         
         return filename
