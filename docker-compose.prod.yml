@@ -2,11 +2,12 @@ version: '3.8'
 
 services:
   food-diary-bot:
-    image: ghcr.io/YOUR_USERNAME/food-diary-bot:latest
-    container_name: food-diary-bot
+    image: ghcr.io/jurisacchetta/food-diary-bot:latest
+    container_name: food-diary-bot-prod
     restart: unless-stopped
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ALLOWED_USER_IDS=${ALLOWED_USER_IDS:-}
     volumes:
       - ./data:/app/data
       - ./photos:/app/photos
@@ -17,3 +18,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

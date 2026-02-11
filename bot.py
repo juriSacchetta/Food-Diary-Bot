@@ -29,16 +29,35 @@ logger = logging.getLogger(__name__)
 
 
 class FoodDiaryBot:
-    def __init__(self, token: str):
+    def __init__(self, token: str, allowed_user_ids: Optional[list] = None):
         self.token = token
+        self.allowed_user_ids = allowed_user_ids or []
         self.db = DatabaseManager()
         self.exporter = ExcelExporter(self.db)
         self.photos_dir = Path("photos")
         self.photos_dir.mkdir(exist_ok=True)
     
+    def is_user_allowed(self, user_id: int) -> bool:
+        """Check if user is allowed to use the bot"""
+        if not self.allowed_user_ids:
+            # If no whitelist is set, allow everyone
+            return True
+        return user_id in self.allowed_user_ids
+    
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
         user = update.effective_user
+        
+        # Check if user is allowed
+        if not self.is_user_allowed(user.id):
+            await update.message.reply_text(
+                f"⛔ Accesso negato.\n\n"
+                f"Il tuo User ID è: `{user.id}`\n"
+                f"Contatta l'amministratore del bot per ottenere l'accesso."
+            )
+            logger.warning(f"Unauthorized access attempt by user {user.id} (@{user.username})")
+            return
+        
         welcome_message = f"""
 👋 Ciao {user.first_name}!
 
@@ -57,6 +76,12 @@ Inizia subito inviando quello che hai mangiato!
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
+        user_id = update.effective_user.id
+        
+        if not self.is_user_allowed(user_id):
+            await update.message.reply_text("⛔ Accesso negato.")
+            return
+        
         help_text = """
 📋 **Comandi disponibili:**
 
@@ -76,6 +101,11 @@ Puoi aggiungere una foto per avere un ricordo visivo! 📷
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /stats command"""
         user_id = update.effective_user.id
+        
+        if not self.is_user_allowed(user_id):
+            await update.message.reply_text("⛔ Accesso negato.")
+            return
+        
         stats = self.db.get_stats(user_id)
         
         stats_message = f"""
@@ -90,6 +120,10 @@ Puoi aggiungere una foto per avere un ricordo visivo! 📷
     async def export_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /export command - export all meals"""
         user_id = update.effective_user.id
+        
+        if not self.is_user_allowed(user_id):
+            await update.message.reply_text("⛔ Accesso negato.")
+            return
         
         await update.message.reply_text("⏳ Sto preparando il tuo export...")
         
@@ -115,6 +149,10 @@ Puoi aggiungere una foto per avere un ricordo visivo! 📷
     async def export_week_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Export last week's meals"""
         user_id = update.effective_user.id
+        
+        if not self.is_user_allowed(user_id):
+            await update.message.reply_text("⛔ Accesso negato.")
+            return
         
         from datetime import date, timedelta
         end_date = date.today()
@@ -148,6 +186,10 @@ Puoi aggiungere una foto per avere un ricordo visivo! 📷
         """Export last month's meals"""
         user_id = update.effective_user.id
         
+        if not self.is_user_allowed(user_id):
+            await update.message.reply_text("⛔ Accesso negato.")
+            return
+        
         from datetime import date, timedelta
         end_date = date.today()
         start_date = end_date - timedelta(days=30)
@@ -179,6 +221,11 @@ Puoi aggiungere una foto per avere un ricordo visivo! 📷
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular text messages and photos"""
         user = update.effective_user
+        
+        if not self.is_user_allowed(user.id):
+            await update.message.reply_text("⛔ Accesso negato.")
+            return
+        
         message_text = update.message.caption if update.message.caption else update.message.text
         
         if not message_text:
@@ -259,7 +306,19 @@ def main():
             "Token non trovato! Imposta la variabile d'ambiente TELEGRAM_BOT_TOKEN"
         )
     
-    bot = FoodDiaryBot(token)
+    # Get allowed user IDs from environment variable
+    allowed_user_ids = []
+    allowed_ids_str = os.getenv("ALLOWED_USER_IDS", "")
+    if allowed_ids_str:
+        try:
+            allowed_user_ids = [int(uid.strip()) for uid in allowed_ids_str.split(",") if uid.strip()]
+            logger.info(f"Whitelist enabled: {len(allowed_user_ids)} authorized user(s)")
+        except ValueError:
+            logger.error("Invalid ALLOWED_USER_IDS format. Use comma-separated integers.")
+    else:
+        logger.warning("No ALLOWED_USER_IDS set. Bot is accessible to everyone!")
+    
+    bot = FoodDiaryBot(token, allowed_user_ids)
     bot.run()
 
 
