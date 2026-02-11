@@ -38,9 +38,17 @@ env/
 .vscode/
 .idea/
 *.swp
-*.swo
+*.owo
 *~
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Node.js (for semantic-release)
+node_modules/
+package-lock.json
+package.json
+
+# Docker
+docker-compose.override.yml

@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  food-diary-bot:
+    image: ghcr.io/YOUR_USERNAME/food-diary-bot:latest
+    container_name: food-diary-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    volumes:
+      - ./data:/app/data
+      - ./photos:/app/photos
+      - ./exports:/app/exports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

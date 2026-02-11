@@ -9,15 +9,15 @@ Bot Telegram per tenere un diario alimentare con foto e export in Excel.
 - 💾 Database SQLite persistente
 - 📊 Statistiche giornaliere e settimanali
 - 📥 Export in Excel (completo, settimanale, mensile)
-- 🔄 Funziona 24/7 sul Raspberry Pi
+- 🐳 Deploy con Docker
+- 🔄 CI/CD automatizzato con GitHub Actions
 
-## 🚀 Setup su Raspberry Pi
+## 🚀 Quick Start con Docker
 
 ### Prerequisiti
 
-1. Raspberry Pi con Raspberry Pi OS installato
-2. Python 3.9 o superiore
-3. Account Telegram e bot token
+1. Docker installato ([Install Docker](https://docs.docker.com/get-docker/))
+2. Account Telegram e bot token
 
 ### Ottenere il Token del Bot Telegram
 
@@ -25,81 +25,102 @@ Bot Telegram per tenere un diario alimentare con foto e export in Excel.
 2. Invia `/newbot` e segui le istruzioni
 3. Copia il token che ricevi (simile a `123456789:ABCdefGHIjklMNOpqrsTUVwxyz`)
 
-### Installazione
+### Esecuzione con Docker
 
 ```bash
-# Clona o copia il progetto sul Raspberry Pi
-cd ~
-# Assumendo che tu abbia già la cartella food_diary_bot
+# Pull l'immagine dal GitHub Container Registry
+docker pull ghcr.io/YOUR_USERNAME/food-diary-bot:latest
 
-cd food_diary_bot
+# Esegui il container
+docker run -d \
+  --name food-diary-bot \
+  --restart unless-stopped \
+  -e TELEGRAM_BOT_TOKEN=your_token_here \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/photos:/app/photos \
+  -v $(pwd)/exports:/app/exports \
+  ghcr.io/YOUR_USERNAME/food-diary-bot:latest
+```
+
+### Oppure con Docker Compose
+
+Crea un file `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  food-diary-bot:
+    image: ghcr.io/YOUR_USERNAME/food-diary-bot:latest
+    container_name: food-diary-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    volumes:
+      - ./data:/app/data
+      - ./photos:/app/photos
+      - ./exports:/app/exports
+```
+
+Poi esegui:
+
+```bash
+# Crea file .env con il tuo token
+echo "TELEGRAM_BOT_TOKEN=your_token_here" > .env
+
+# Avvia il bot
+docker-compose up -d
+
+# Vedi i log
+docker-compose logs -f
+```
+
+## 🔨 Build Locale
+
+Se vuoi buildare l'immagine localmente:
+
+```bash
+# Clona il repository
+git clone https://github.com/YOUR_USERNAME/Food-Diary-Bot.git
+cd Food-Diary-Bot
+
+# Build l'immagine
+docker build -t food-diary-bot .
+
+# Esegui
+docker run -d \
+  --name food-diary-bot \
+  -e TELEGRAM_BOT_TOKEN=your_token_here \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/photos:/app/photos \
+  -v $(pwd)/exports:/app/exports \
+  food-diary-bot
+```
+
+## 🐍 Setup Python Locale (Sviluppo)
+
+```bash
+# Clona il repository
+git clone https://github.com/YOUR_USERNAME/Food-Diary-Bot.git
+cd Food-Diary-Bot
 
 # Crea virtual environment
 python3 -m venv venv
 
 # Attiva virtual environment
-source venv/bin/activate
+source venv/bin/activate  # Linux/Mac
+# oppure
+venv\Scripts\activate  # Windows
 
 # Installa dipendenze
 pip install -r requirements.txt
 
-# Crea file .env con il tuo token
+# Crea file .env
 cp .env.example .env
-nano .env
-# Inserisci il tuo token: TELEGRAM_BOT_TOKEN=il_tuo_token_qui
-```
-
-### Test del Bot
-
-```bash
-# Attiva virtual environment se non già fatto
-source venv/bin/activate
+# Modifica .env e inserisci il tuo token
 
 # Avvia il bot
 python bot.py
-```
-
-Se tutto funziona, vedrai "Bot started!" nel terminale. Prova a inviare un messaggio al tuo bot su Telegram!
-
-### Configurazione come Servizio (Avvio Automatico)
-
-Per far partire il bot automaticamente all'avvio del Raspberry Pi:
-
-```bash
-# Modifica il file service con il tuo token
-nano food_diary_bot.service
-# Sostituisci "your_token_here" con il tuo vero token
-
-# Copia il file service
-sudo cp food_diary_bot.service /etc/systemd/system/
-
-# Ricarica systemd
-sudo systemctl daemon-reload
-
-# Abilita il servizio
-sudo systemctl enable food_diary_bot.service
-
-# Avvia il servizio
-sudo systemctl start food_diary_bot.service
-
-# Verifica lo stato
-sudo systemctl status food_diary_bot.service
-```
-
-### Comandi Utili per Gestire il Servizio
-
-```bash
-# Vedere i log del bot
-sudo journalctl -u food_diary_bot.service -f
-
-# Fermare il bot
-sudo systemctl stop food_diary_bot.service
-
-# Riavviare il bot
-sudo systemctl restart food_diary_bot.service
-
-# Disabilitare l'avvio automatico
-sudo systemctl disable food_diary_bot.service
 ```
 
 ## 📱 Come Usare il Bot
@@ -129,6 +150,69 @@ Pizza margherita con birra
 
 La foto verrà salvata automaticamente!
 
+## 🔄 CI/CD e Versionamento
+
+Questo progetto usa **GitHub Actions** per CI/CD automatizzato e **semantic-release** per il versionamento automatico.
+
+### Commit Messages
+
+I commit devono seguire la [Conventional Commits](https://www.conventionalcommits.org/) specification:
+
+```
+type(scope): subject
+
+body (optional)
+
+footer (optional)
+```
+
+**Tipi disponibili:**
+- `feat`: Nuova funzionalità (genera MINOR version)
+- `fix`: Bug fix (genera PATCH version)
+- `docs`: Modifiche alla documentazione
+- `style`: Cambiamenti di formattazione
+- `refactor`: Refactoring del codice
+- `perf`: Miglioramenti di performance
+- `test`: Aggiunta/modifica test
+- `build`: Modifiche al build system
+- `ci`: Modifiche alla CI/CD
+- `chore`: Altri cambiamenti
+
+**Esempi:**
+```bash
+feat: add meal search functionality
+fix: resolve database connection timeout
+docs: update Docker setup instructions
+ci: add automated testing workflow
+```
+
+**Breaking changes** (genera MAJOR version):
+```bash
+feat!: redesign database schema
+
+BREAKING CHANGE: This changes the database structure
+```
+
+### Pipeline CI/CD
+
+La pipeline si attiva automaticamente su push e pull request:
+
+1. **Commit Lint** (PR): Valida i messaggi di commit
+2. **Build & Push**: Build dell'immagine Docker e push su GitHub Container Registry
+3. **Semantic Release** (main branch): Genera automaticamente:
+   - Nuovo version tag
+   - CHANGELOG.md aggiornato
+   - GitHub Release con note
+
+### GitHub Container Registry
+
+Le immagini Docker vengono automaticamente pubblicate su:
+```
+ghcr.io/YOUR_USERNAME/food-diary-bot:latest
+ghcr.io/YOUR_USERNAME/food-diary-bot:1.0.0
+ghcr.io/YOUR_USERNAME/food-diary-bot:main
+```
+
 ## 📁 Struttura del Progetto
 
 ```
@@ -137,10 +221,17 @@ food_diary_bot/
 ├── database.py                 # Gestione database SQLite
 ├── exporter.py                 # Export in Excel
 ├── requirements.txt            # Dipendenze Python
+├── Dockerfile                  # Docker configuration
+├── .dockerignore              # File da escludere dal build
 ├── .env.example               # Template per variabili d'ambiente
 ├── .gitignore                 # File da ignorare in git
-├── food_diary_bot.service     # File service per systemd
+├── commitlint.config.js       # Configurazione commit lint
+├── .releaserc.json            # Configurazione semantic-release
+├── .github/
+│   └── workflows/
+│       └── ci-cd.yml          # Pipeline CI/CD
 ├── README.md                  # Questa guida
+├── CHANGELOG.md               # Changelog generato automaticamente
 ├── data/                      # Database (creata automaticamente)
 │   └── food_diary.db
 ├── photos/                    # Foto salvate (creata automaticamente)
@@ -150,14 +241,27 @@ food_diary_bot/
 
 ## 🔧 Troubleshooting
 
-### Il bot non risponde
+### Docker: Il bot non risponde
 
 ```bash
-# Controlla i log
-sudo journalctl -u food_diary_bot.service -n 50
+# Controlla i log del container
+docker logs food-diary-bot
 
-# Verifica che il servizio sia attivo
-sudo systemctl status food_diary_bot.service
+# Oppure con docker-compose
+docker-compose logs -f
+
+# Verifica che il container sia in esecuzione
+docker ps
+```
+
+### Docker: Riavviare il bot
+
+```bash
+# Con Docker
+docker restart food-diary-bot
+
+# Oppure con docker-compose
+docker-compose restart
 ```
 
 ### Errore "Token non trovato"
@@ -165,21 +269,11 @@ sudo systemctl status food_diary_bot.service
 Assicurati di aver impostato correttamente il token:
 
 ```bash
-# Nel file .env
-TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+# Verifica la variabile d'ambiente
+docker exec food-diary-bot env | grep TELEGRAM_BOT_TOKEN
 
-# Oppure nel file food_diary_bot.service
-Environment="TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-```
-
-### Database bloccato
-
-```bash
-# Ferma il bot
-sudo systemctl stop food_diary_bot.service
-
-# Riavvia
-sudo systemctl start food_diary_bot.service
+# Oppure controlla il file .env
+cat .env
 ```
 
 ### Spazio su disco
@@ -188,10 +282,26 @@ Le foto possono occupare spazio. Per controllare:
 
 ```bash
 # Vedi quanto spazio occupa
-du -sh ~/food_diary_bot/photos/
+du -sh ./photos/
+
+# Con Docker
+docker exec food-diary-bot du -sh /app/photos/
 
 # Elimina foto vecchie se necessario (ATTENZIONE!)
-# find ~/food_diary_bot/photos/ -mtime +90 -delete  # Elimina foto più vecchie di 90 giorni
+# find ./photos/ -mtime +90 -delete  # Elimina foto più vecchie di 90 giorni
+```
+
+### Database bloccato
+
+```bash
+# Ferma il container
+docker stop food-diary-bot
+
+# Riavvia
+docker start food-diary-bot
+
+# Oppure con docker-compose
+docker-compose restart
 ```
 
 ## 🔒 Sicurezza
@@ -206,12 +316,15 @@ Per fare backup del database:
 
 ```bash
 # Backup manuale
-cp ~/food_diary_bot/data/food_diary.db ~/backup/food_diary_$(date +%Y%m%d).db
+cp ./data/food_diary.db ./backup/food_diary_$(date +%Y%m%d).db
 
-# Backup automatico giornaliero (aggiungi a crontab)
+# Con Docker (se il volume è montato)
+docker cp food-diary-bot:/app/data/food_diary.db ./backup/food_diary_$(date +%Y%m%d).db
+
+# Backup automatico giornaliero (crontab)
 crontab -e
 # Aggiungi questa riga:
-# 0 2 * * * cp ~/food_diary_bot/data/food_diary.db ~/backup/food_diary_$(date +\%Y\%m\%d).db
+# 0 2 * * * docker cp food-diary-bot:/app/data/food_diary.db ~/backup/food_diary_$(date +\%Y\%m\%d).db
 ```
 
 ## 🆕 Aggiornamenti Futuri (Idee)
