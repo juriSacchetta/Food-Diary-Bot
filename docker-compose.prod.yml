@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  food-diary-bot:
+    image: ghcr.io/jurisacchetta/food-diary-bot:latest
+    container_name: food-diary-bot-prod
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ALLOWED_USER_IDS=${ALLOWED_USER_IDS:-}
+    volumes:
+      - ./data:/app/data
+      - ./photos:/app/photos
+      - ./exports:/app/exports
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
