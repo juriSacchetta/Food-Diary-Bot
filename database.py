@@ -30,13 +30,14 @@ class DatabaseManager:
                 username TEXT,
                 meal_type TEXT DEFAULT 'meal',
                 ingredients TEXT,
+                calories INTEGER,
                 message TEXT NOT NULL,
                 photo_path TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
         
-        # Migration: Add meal_type and ingredients columns if they don't exist
+        # Migration: Add meal_type, ingredients, and calories columns if they don't exist
         cursor.execute("PRAGMA table_info(meals)")
         columns = [column[1] for column in cursor.fetchall()]
         
@@ -45,6 +46,9 @@ class DatabaseManager:
         
         if 'ingredients' not in columns:
             cursor.execute("ALTER TABLE meals ADD COLUMN ingredients TEXT")
+        
+        if 'calories' not in columns:
+            cursor.execute("ALTER TABLE meals ADD COLUMN calories INTEGER")
         
         conn.commit()
         conn.close()
@@ -56,16 +60,17 @@ class DatabaseManager:
         message: str, 
         photo_path: Optional[str] = None,
         meal_type: str = 'meal',
-        ingredients: Optional[str] = None
+        ingredients: Optional[str] = None,
+        calories: Optional[int] = None
     ) -> int:
         """Add a new meal entry"""
         conn = self.get_connection()
         cursor = conn.cursor()
         
         cursor.execute("""
-            INSERT INTO meals (user_id, username, meal_type, ingredients, message, photo_path)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (user_id, username, meal_type, ingredients, message, photo_path))
+            INSERT INTO meals (user_id, username, meal_type, ingredients, calories, message, photo_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (user_id, username, meal_type, ingredients, calories, message, photo_path))
         
         meal_id = cursor.lastrowid if cursor.lastrowid else 0
         conn.commit()
@@ -80,14 +85,14 @@ class DatabaseManager:
         
         if user_id:
             cursor.execute("""
-                SELECT id, user_id, username, message, photo_path, timestamp
+                SELECT id, user_id, username, meal_type, ingredients, calories, message, photo_path, timestamp
                 FROM meals
                 WHERE user_id = ?
                 ORDER BY timestamp DESC
             """, (user_id,))
         else:
             cursor.execute("""
-                SELECT id, user_id, username, message, photo_path, timestamp
+                SELECT id, user_id, username, meal_type, ingredients, calories, message, photo_path, timestamp
                 FROM meals
                 ORDER BY timestamp DESC
             """)
@@ -108,7 +113,7 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT id, user_id, username, message, photo_path, timestamp
+            SELECT id, user_id, username, meal_type, ingredients, calories, message, photo_path, timestamp
             FROM meals
             WHERE user_id = ? AND DATE(timestamp) BETWEEN ? AND ?
             ORDER BY timestamp DESC
@@ -160,10 +165,38 @@ class DatabaseManager:
         """, (user_id,))
         meals_this_week = cursor.fetchone()[0]
         
+        # Total calories
+        cursor.execute("""
+            SELECT SUM(calories) FROM meals 
+            WHERE user_id = ? AND calories IS NOT NULL
+        """, (user_id,))
+        total_calories = cursor.fetchone()[0] or 0
+        
+        # Calories today
+        cursor.execute("""
+            SELECT SUM(calories) FROM meals 
+            WHERE user_id = ? AND DATE(timestamp) = DATE('now') AND calories IS NOT NULL
+        """, (user_id,))
+        calories_today = cursor.fetchone()[0] or 0
+        
+        # Calories this week
+        cursor.execute("""
+            SELECT SUM(calories) FROM meals 
+            WHERE user_id = ? AND DATE(timestamp) >= DATE('now', '-7 days') AND calories IS NOT NULL
+        """, (user_id,))
+        calories_this_week = cursor.fetchone()[0] or 0
+        
+        # Average calories per meal
+        avg_calories = total_calories // total_meals if total_meals > 0 and total_calories > 0 else 0
+        
         conn.close()
         
         return {
             "total_meals": total_meals,
             "meals_today": meals_today,
-            "meals_this_week": meals_this_week
+            "meals_this_week": meals_this_week,
+            "total_calories": total_calories,
+            "calories_today": calories_today,
+            "calories_this_week": calories_this_week,
+            "avg_calories_per_meal": avg_calories
         }

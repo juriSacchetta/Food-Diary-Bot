@@ -29,6 +29,9 @@ class Meal(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, nullable=False)
     username = Column(String, nullable=True)
+    meal_type = Column(String, nullable=True)
+    ingredients = Column(String, nullable=True)
+    calories = Column(Integer, nullable=True)
     message = Column(String, nullable=False)
     photo_path = Column(String, nullable=True)
     timestamp = Column(DateTime, nullable=False)
@@ -94,14 +97,14 @@ class MealModelView(ModelView):
     """Custom ModelView for Meal with enhanced features"""
     
     # Column display configuration
-    column_list = ['id', 'user_id', 'username', 'message', 'photo_path', 'timestamp']
-    column_searchable_list = ['username', 'message', 'user_id']
-    column_filters = ['user_id', 'username', 'timestamp']
-    column_sortable_list = ['id', 'user_id', 'username', 'timestamp']
+    column_list = ['id', 'user_id', 'username', 'meal_type', 'ingredients', 'calories', 'message', 'photo_path', 'timestamp']
+    column_searchable_list = ['username', 'message', 'user_id', 'ingredients']
+    column_filters = ['user_id', 'username', 'meal_type', 'timestamp']
+    column_sortable_list = ['id', 'user_id', 'username', 'meal_type', 'calories', 'timestamp']
     column_default_sort = ('timestamp', True)  # Sort by timestamp DESC
     
     # Form configuration
-    form_columns = ['user_id', 'username', 'message', 'photo_path', 'timestamp']
+    form_columns = ['user_id', 'username', 'meal_type', 'ingredients', 'calories', 'message', 'photo_path', 'timestamp']
     
     # Pagination
     page_size = 50

@@ -20,6 +20,7 @@ from telegram.ext import (
 
 from database import DatabaseManager
 from exporter import ExcelExporter
+from nutrition_api import NutritionAPI
 
 
 # Configure logging
@@ -30,15 +31,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Conversation states
-MEAL_TYPE, INGREDIENTS, PHOTO, NOTES = range(4)
+MEAL_TYPE, INGREDIENTS, CALORIES, PHOTO, NOTES = range(5)
 
 
 class FoodDiaryBot:
-    def __init__(self, token: str, allowed_user_ids: Optional[list] = None):
+    def __init__(self, token: str, allowed_user_ids: Optional[list] = None, nutrition_api_key: Optional[str] = None):
         self.token = token
         self.allowed_user_ids = allowed_user_ids or []
         self.db = DatabaseManager()
         self.exporter = ExcelExporter(self.db)
+        self.nutrition_api = NutritionAPI(nutrition_api_key)
         self.photos_dir = Path("photos")
         self.photos_dir.mkdir(exist_ok=True)
     
@@ -122,6 +124,11 @@ Usa il comando /new_meal e segui la procedura guidata:
 🍽️ Pasti totali: {stats['total_meals']}
 📅 Pasti oggi: {stats['meals_today']}
 📆 Pasti questa settimana: {stats['meals_this_week']}
+
+🔥 Calorie totali: {stats['total_calories']} kcal
+🔥 Calorie oggi: {stats['calories_today']} kcal
+🔥 Calorie settimana: {stats['calories_this_week']} kcal
+📊 Media per pasto: {stats['avg_calories_per_meal']} kcal
         """
         await update.message.reply_text(stats_message)
     
@@ -269,7 +276,7 @@ Usa il comando /new_meal e segui la procedura guidata:
         return INGREDIENTS
     
     async def ingredients_received(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle ingredients input"""
+        """Handle ingredients input and calculate calories"""
         user_id = update.effective_user.id
         
         if not self.is_user_allowed(user_id):
@@ -277,7 +284,59 @@ Usa il comando /new_meal e segui la procedura guidata:
             return ConversationHandler.END
         
         # Store ingredients
-        context.user_data['ingredients'] = update.message.text
+        ingredients_text = update.message.text
+        context.user_data['ingredients'] = ingredients_text
+        
+        # Calculate calories using nutrition API
+        await update.message.reply_text(
+            "⏳ Sto calcolando le calorie..."
+        )
+        
+        estimated_calories = self.nutrition_api.estimate_calories_from_ingredients(ingredients_text)
+        
+        if estimated_calories:
+            context.user_data['calories'] = estimated_calories
+            
+            # Show estimated calories with option to edit
+            keyboard = [
+                [InlineKeyboardButton("✅ Conferma calorie", callback_data="confirm_calories")],
+                [InlineKeyboardButton("✏️ Modifica calorie", callback_data="edit_calories")],
+                [InlineKeyboardButton("⏭️ Salta calorie", callback_data="skip_calories")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"🔥 **Calorie stimate:** {estimated_calories} kcal\n\n"
+                f"Stima basata sugli ingredienti (circa 100g per ingrediente).\n\n"
+                f"Vuoi confermare, modificare o saltare?",
+                reply_markup=reply_markup
+            )
+        else:
+            # Could not estimate calories - ask user to input manually or skip
+            keyboard = [
+                [InlineKeyboardButton("✏️ Inserisci manualmente", callback_data="edit_calories")],
+                [InlineKeyboardButton("⏭️ Salta calorie", callback_data="skip_calories")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "⚠️ Non sono riuscito a stimare le calorie automaticamente.\n\n"
+                "Vuoi inserirle manualmente o saltare questo passaggio?",
+                reply_markup=reply_markup
+            )
+        
+        return CALORIES
+    
+    async def confirm_calories(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """User confirmed the estimated calories - proceed to photo"""
+        query = update.callback_query
+        await query.answer()
+        
+        calories = context.user_data.get('calories', 0)
+        
+        await query.edit_message_text(
+            f"✅ Calorie confermate: {calories} kcal"
+        )
         
         # Ask for photo
         keyboard = [
@@ -285,8 +344,88 @@ Usa il comando /new_meal e segui la procedura guidata:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(
+        await query.message.reply_text(
             "📷 Ottimo! Ora invia una **foto** del pasto\n"
+            "(oppure premi 'Salta foto' per continuare)",
+            reply_markup=reply_markup
+        )
+        
+        return PHOTO
+    
+    async def edit_calories(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """User wants to manually input calories"""
+        query = update.callback_query
+        await query.answer()
+        
+        await query.edit_message_text(
+            "✏️ Inserisci manualmente le calorie del pasto:\n"
+            "(es: 450)"
+        )
+        
+        return CALORIES
+    
+    async def manual_calories_received(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle manually entered calories"""
+        user_id = update.effective_user.id
+        
+        if not self.is_user_allowed(user_id):
+            await update.message.reply_text("⛔ Accesso negato.")
+            return ConversationHandler.END
+        
+        try:
+            calories = int(update.message.text.strip())
+            
+            if calories < 0 or calories > 10000:
+                await update.message.reply_text(
+                    "⚠️ Inserisci un valore valido tra 0 e 10000 kcal."
+                )
+                return CALORIES
+            
+            context.user_data['calories'] = calories
+            
+            await update.message.reply_text(
+                f"✅ Calorie impostate: {calories} kcal"
+            )
+            
+            # Ask for photo
+            keyboard = [
+                [InlineKeyboardButton("⏭️ Salta foto", callback_data="skip_photo")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                "📷 Ottimo! Ora invia una **foto** del pasto\n"
+                "(oppure premi 'Salta foto' per continuare)",
+                reply_markup=reply_markup
+            )
+            
+            return PHOTO
+            
+        except ValueError:
+            await update.message.reply_text(
+                "⚠️ Inserisci un numero valido (es: 450)"
+            )
+            return CALORIES
+    
+    async def skip_calories(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """User chose to skip calories - proceed to photo"""
+        query = update.callback_query
+        await query.answer()
+        
+        context.user_data['calories'] = None
+        
+        await query.edit_message_text(
+            "⏭️ Calorie saltate"
+        )
+        
+        # Ask for photo
+        keyboard = [
+            [InlineKeyboardButton("⏭️ Salta foto", callback_data="skip_photo")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.message.reply_text(
+            "📷 Ora invia una **foto** del pasto\n"
             "(oppure premi 'Salta foto' per continuare)",
             reply_markup=reply_markup
         )
@@ -379,6 +518,7 @@ Usa il comando /new_meal e segui la procedura guidata:
         meal_type = context.user_data.get('meal_type', 'meal')
         ingredients = context.user_data.get('ingredients', 'Non specificato')
         photo_path = context.user_data.get('photo_path', None)
+        calories = context.user_data.get('calories', None)
         
         # Create message text
         if message:
@@ -393,7 +533,8 @@ Usa il comando /new_meal e segui la procedura guidata:
             message=full_message,
             photo_path=photo_path,
             meal_type=meal_type,
-            ingredients=ingredients
+            ingredients=ingredients,
+            calories=calories
         )
         
         # Send confirmation
@@ -405,8 +546,12 @@ Usa il comando /new_meal e segui la procedura guidata:
             f"✅ **Pasto registrato con successo!**\n\n"
             f"{meal_type_emoji} Tipo: {meal_type_label}\n"
             f"📝 Ingredienti: {ingredients}\n"
-            f"🕐 {timestamp}"
         )
+        
+        if calories:
+            confirmation += f"🔥 Calorie: {calories} kcal\n"
+        
+        confirmation += f"🕐 {timestamp}"
         
         if photo_path:
             confirmation += "\n📷 Foto salvata"
@@ -482,6 +627,12 @@ Usa il comando /new_meal e segui la procedura guidata:
             states={
                 MEAL_TYPE: [CallbackQueryHandler(self.meal_type_selected)],
                 INGREDIENTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.ingredients_received)],
+                CALORIES: [
+                    CallbackQueryHandler(self.confirm_calories, pattern="^confirm_calories$"),
+                    CallbackQueryHandler(self.edit_calories, pattern="^edit_calories$"),
+                    CallbackQueryHandler(self.skip_calories, pattern="^skip_calories$"),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.manual_calories_received)
+                ],
                 PHOTO: [
                     MessageHandler(filters.PHOTO, self.photo_received),
                     CallbackQueryHandler(self.skip_photo, pattern="^skip_photo$")
@@ -537,7 +688,14 @@ def main():
     else:
         logger.warning("No ALLOWED_USER_IDS set. Bot is accessible to everyone!")
     
-    bot = FoodDiaryBot(token, allowed_user_ids)
+    # Get nutrition API key (optional)
+    nutrition_api_key = os.getenv("USDA_API_KEY", None)
+    if nutrition_api_key:
+        logger.info("USDA API key found - using authenticated API")
+    else:
+        logger.info("No USDA API key - using DEMO_KEY (30 requests/hour limit)")
+    
+    bot = FoodDiaryBot(token, allowed_user_ids, nutrition_api_key)
     bot.run()
 
 
