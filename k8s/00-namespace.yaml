@@ -1,0 +1,9 @@
+# Namespace: Isolates Food Diary Bot resources
+# Think of it as a "folder" in Kubernetes to organize your app
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: food-diary
+  labels:
+    app: food-diary-bot
+    environment: production

@@ -1,0 +1,133 @@
+# Deployment: Manages the Telegram Bot Pods
+#
+# Cos'è un Deployment?
+# - Gestisce i Pod (container in esecuzione)
+# - Definisce quante repliche vuoi (replicas: 1 = un solo bot)
+# - Auto-healing: se il Pod crasha, ne crea uno nuovo
+# - Rolling updates: aggiorna senza downtime
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: food-diary-bot
+  namespace: food-diary
+  labels:
+    app: food-diary-bot
+    component: telegram-bot
+spec:
+  # Quante copie del bot vuoi?
+  # Per un bot Telegram, 1 è sufficiente (Telegram gestisce un bot per token)
+  replicas: 1
+  
+  # Strategia di aggiornamento
+  strategy:
+    type: RollingUpdate  # Aggiorna gradualmente senza downtime
+    rollingUpdate:
+      maxUnavailable: 0  # Mantieni sempre almeno 1 Pod running
+      maxSurge: 1        # Massimo 1 Pod extra durante l'update
+  
+  # Selettore: identifica quali Pod appartengono a questo Deployment
+  selector:
+    matchLabels:
+      app: food-diary-bot
+      component: telegram-bot
+  
+  # Template: descrive come creare i Pod
+  template:
+    metadata:
+      labels:
+        app: food-diary-bot
+        component: telegram-bot
+    spec:
+      # Restart policy: ricrea sempre il Pod se crasha
+      restartPolicy: Always
+      
+      containers:
+      - name: bot
+        # Immagine Docker del tuo bot
+        # IMPORTANTE: Aggiorna questo con la tua immagine reale!
+        image: ghcr.io/jurisacchetta/food-diary-bot:latest
+        imagePullPolicy: Always  # Scarica sempre l'ultima versione
+        
+        # Comando da eseguire
+        command: ["python", "-u", "bot.py"]
+        
+        # Variabili d'ambiente dal ConfigMap
+        envFrom:
+        - configMapRef:
+            name: food-diary-config
+        
+        # Variabili d'ambiente dai Secrets
+        env:
+        - name: TELEGRAM_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: food-diary-secrets
+              key: telegram-bot-token
+        
+        - name: USDA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: food-diary-secrets
+              key: usda-api-key
+              optional: true  # Non richiesto
+        
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: food-diary-secrets
+              key: gemini-api-key
+              optional: true  # Non richiesto
+        
+        # Montaggio dei volumi persistenti
+        volumeMounts:
+        - name: database
+          mountPath: /app/data
+        - name: photos
+          mountPath: /app/photos
+        - name: exports
+          mountPath: /app/exports
+        
+        # Risorse: quanto CPU e RAM può usare il Pod
+        resources:
+          requests:
+            memory: "256Mi"  # Minimo garantito
+            cpu: "100m"      # 0.1 CPU core
+          limits:
+            memory: "512Mi"  # Massimo consentito
+            cpu: "500m"      # 0.5 CPU core
+        
+        # Health check: K8s usa questi per capire se il Pod è sano
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 10  # Aspetta 10s prima del primo check
+          periodSeconds: 30        # Controlla ogni 30s
+          timeoutSeconds: 10
+          failureThreshold: 3      # Riavvia dopo 3 fallimenti consecutivi
+        
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      
+      # Definizione dei volumi da montare
+      volumes:
+      - name: database
+        persistentVolumeClaim:
+          claimName: food-diary-db-pvc
+      - name: photos
+        persistentVolumeClaim:
+          claimName: food-diary-photos-pvc
+      - name: exports
+        persistentVolumeClaim:
+          claimName: food-diary-exports-pvc

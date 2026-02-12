@@ -1,0 +1,23 @@
+# ConfigMap: Non-sensitive configuration data
+# Queste sono variabili d'ambiente che NON sono sensibili
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: food-diary-config
+  namespace: food-diary
+data:
+  # Admin Panel Configuration
+  ADMIN_HOST: "0.0.0.0"
+  ADMIN_PORT: "5000"
+  ADMIN_DEBUG: "False"
+  
+  # Database Configuration
+  DB_PATH: "/app/data/food_diary.db"
+  
+  # Application Configuration
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  
+  # Allowed User IDs (comma-separated)
+  # Puoi personalizzare questo valore
+  ALLOWED_USER_IDS: ""

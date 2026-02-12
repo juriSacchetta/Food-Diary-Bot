@@ -52,3 +52,7 @@ package.json
 
 # Docker
 docker-compose.override.yml
+
+# Kubernetes Secrets (real values)
+k8s/*-real.yaml
+k8s/01-secrets-real.yaml

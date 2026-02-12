@@ -1,0 +1,65 @@
+# PersistentVolumeClaim: Requests storage for database and photos
+#
+# Cos'è un PVC?
+# - È una "richiesta" di storage persistente
+# - Kubernetes trova un PersistentVolume disponibile e lo assegna
+# - I dati sopravvivono anche se il Pod viene distrutto
+#
+# In questo setup creiamo 3 PVC separati per:
+# 1. Database SQLite
+# 2. Foto dei pasti
+# 3. Export Excel
+#
+---
+# Database PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: food-diary-db-pvc
+  namespace: food-diary
+  labels:
+    app: food-diary-bot
+    component: database
+spec:
+  accessModes:
+    - ReadWriteOnce  # RWO: può essere montato in lettura-scrittura da un solo nodo
+  resources:
+    requests:
+      storage: 1Gi  # 1 GB per il database (più che sufficiente per SQLite)
+  # storageClassName: standard  # Decommentare e specificare se necessario
+
+---
+# Photos PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: food-diary-photos-pvc
+  namespace: food-diary
+  labels:
+    app: food-diary-bot
+    component: photos
+spec:
+  accessModes:
+    - ReadWriteMany  # RWM: può essere montato da più Pod (bot + admin)
+  resources:
+    requests:
+      storage: 10Gi  # 10 GB per le foto
+  # storageClassName: standard  # Decommentare e specificare se necessario
+
+---
+# Exports PVC
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: food-diary-exports-pvc
+  namespace: food-diary
+  labels:
+    app: food-diary-bot
+    component: exports
+spec:
+  accessModes:
+    - ReadWriteMany  # RWM: accessibile da admin panel
+  resources:
+    requests:
+      storage: 2Gi  # 2 GB per gli export Excel
+  # storageClassName: standard  # Decommentare e specificare se necessario

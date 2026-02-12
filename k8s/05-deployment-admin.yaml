@@ -1,0 +1,121 @@
+# Deployment: Manages the Admin Panel Pods
+#
+# Questo Deployment gestisce il pannello admin Flask
+# Simile al bot, ma con porta esposta per HTTP
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: food-diary-admin
+  namespace: food-diary
+  labels:
+    app: food-diary-bot
+    component: admin-panel
+spec:
+  replicas: 1  # Un solo pannello admin
+  
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  
+  selector:
+    matchLabels:
+      app: food-diary-bot
+      component: admin-panel
+  
+  template:
+    metadata:
+      labels:
+        app: food-diary-bot
+        component: admin-panel
+    spec:
+      restartPolicy: Always
+      
+      containers:
+      - name: admin
+        image: ghcr.io/jurisacchetta/food-diary-bot:latest
+        imagePullPolicy: Always
+        
+        # Comando: esegui admin.py invece di bot.py
+        command: ["python", "-u", "admin.py"]
+        
+        # Porta esposta dal container
+        ports:
+        - name: http
+          containerPort: 5000
+          protocol: TCP
+        
+        # Variabili d'ambiente dal ConfigMap
+        envFrom:
+        - configMapRef:
+            name: food-diary-config
+        
+        # Variabili d'ambiente dai Secrets
+        env:
+        - name: ADMIN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: food-diary-secrets
+              key: admin-username
+        
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: food-diary-secrets
+              key: admin-password
+        
+        - name: ADMIN_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: food-diary-secrets
+              key: admin-secret-key
+        
+        # Montaggio volumi (database e photos, non exports)
+        volumeMounts:
+        - name: database
+          mountPath: /app/data
+        - name: photos
+          mountPath: /app/photos
+        - name: exports
+          mountPath: /app/exports
+        
+        # Risorse
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        
+        # Health checks per il server HTTP
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+      
+      volumes:
+      - name: database
+        persistentVolumeClaim:
+          claimName: food-diary-db-pvc
+      - name: photos
+        persistentVolumeClaim:
+          claimName: food-diary-photos-pvc
+      - name: exports
+        persistentVolumeClaim:
+          claimName: food-diary-exports-pvc

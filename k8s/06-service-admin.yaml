@@ -1,0 +1,67 @@
+# Service: Exposes the Admin Panel to the network
+#
+# Cos'è un Service?
+# - Espone i Pod alla rete (interno al cluster o esterno)
+# - Fornisce un indirizzo stabile (i Pod possono cambiare IP)
+# - Fa load balancing tra le repliche
+#
+# Tipi di Service:
+# - ClusterIP: solo interno al cluster (default)
+# - NodePort: espone su porta del nodo (30000-32767)
+# - LoadBalancer: usa load balancer del cloud provider
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: food-diary-admin-service
+  namespace: food-diary
+  labels:
+    app: food-diary-bot
+    component: admin-panel
+spec:
+  # Tipo di Service
+  # NodePort: espone su porta del nodo (accessibile dall'esterno)
+  # Porta sarà: http://NODE_IP:NODE_PORT
+  type: NodePort
+  
+  # Selettore: a quali Pod inviare il traffico
+  selector:
+    app: food-diary-bot
+    component: admin-panel
+  
+  ports:
+  - name: http
+    protocol: TCP
+    port: 5000        # Porta del Service (interno al cluster)
+    targetPort: 5000  # Porta del Pod (container)
+    nodePort: 30500   # Porta esposta sul nodo (opzionale, altrimenti assegnata automaticamente)
+  
+  # Session affinity: mantieni la sessione sullo stesso Pod
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 ore
+
+---
+# Service alternativo: LoadBalancer (per cloud provider)
+# Decommentare se usi AWS, GCP, Azure, etc.
+#
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: food-diary-admin-loadbalancer
+#   namespace: food-diary
+#   labels:
+#     app: food-diary-bot
+#     component: admin-panel
+# spec:
+#   type: LoadBalancer
+#   selector:
+#     app: food-diary-bot
+#     component: admin-panel
+#   ports:
+#   - name: http
+#     protocol: TCP
+#     port: 80
+#     targetPort: 5000
+#   sessionAffinity: ClientIP
