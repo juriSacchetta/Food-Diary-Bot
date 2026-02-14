@@ -141,6 +141,13 @@ class MealModelView(ModelView):
     def is_accessible(self):
         """Check if admin panel is accessible (BasicAuth will handle auth)"""
         return True
+    
+    @expose('/')
+    def index_view(self, **kwargs):
+        """Override index_view to accept cls parameter from Flask-Admin routing"""
+        # Remove 'cls' from kwargs if present to avoid passing it to parent
+        kwargs.pop('cls', None)
+        return super(MealModelView, self).index_view(**kwargs)
 
 
 def create_app():
