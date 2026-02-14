@@ -25,6 +25,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY bot.py database.py exporter.py nutrition_api.py llm_processor.py admin.py ./
 
+# Copy templates directory for Flask admin
+COPY templates ./templates
+
 # Create directories for data persistence
 RUN mkdir -p /app/data /app/photos /app/exports
 
