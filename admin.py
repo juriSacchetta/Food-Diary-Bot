@@ -48,7 +48,7 @@ class SecureAdminIndexView(AdminIndexView):
         super(SecureAdminIndexView, self).__init__(*args, **kwargs)
     
     @expose('/')
-    def index(self):
+    def index(self, **kwargs):
         if not self.is_authenticated():
             return redirect(url_for('admin.login_view'))
         
@@ -82,7 +82,7 @@ class SecureAdminIndexView(AdminIndexView):
         )
     
     @expose('/login/', methods=('GET', 'POST'))
-    def login_view(self):
+    def login_view(self, **kwargs):
         # BasicAuth handles the actual authentication
         return redirect(url_for('admin.index'))
     
